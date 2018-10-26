@@ -5,4 +5,3 @@ authors = ["Peter Hall <peterjoel@gmail.com>"]
 
 [dependencies]
 rustty = "0.1.12"
-game-grid = { git = "https://github.com/peterjoel/game-grid", tag = "v0.0.1" }

@@ -1,192 +1,193 @@
 extern crate rustty;
-extern crate game_grid;
 
-use std::io;
+use std::fmt::Debug;
 use std::time::Duration;
-use std::mem;
+use std::sync::{Mutex, Arc};
+use std::sync::mpsc::{channel, Sender, Receiver, RecvError, TryRecvError};
 
-mod game;
+mod grid;
+mod game;   
+mod editor;
+mod presets;
+mod runner;
+
+use grid::Grid;
 use game::Gol;
+use editor::{Editor, EditAction};
+use runner::Runner;
 
-
-enum AppState {
-    Paused, Editing, Running,
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum AppAction {
+    Quit,
+    TogglePause,
+    EditMode,
+    EditDone,
 }
 
-impl AppState {
-    fn toggle_paused(&mut self) {
-        match self {
-            AppState::Paused => { mem::replace(self, AppState::Running); },
-            AppState::Running => { mem::replace(self, AppState::Paused); },
-            _ => ()
-        }
-    }
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum GameState {
+    Running,
+    Paused,
+    Editing,
 }
 
-struct App {
-    term: rustty::Terminal,
-    game: Gol,
-    state: AppState,
-    frame_delay: u64,
-    edit_cursor: (usize, usize),
-}
+fn main() {
+    let mut state = GameState::Paused;
+    // TODO: handle resizing the terminal window
+    let mut term = rustty::Terminal::new().unwrap();
+    let game = Arc::new(Mutex::new(
+        Gol::new(term.cols(), term.rows(), true)
+    ));
+    let editor = Arc::new(Mutex::new(Editor::new()));
+    let (edit_actions, editor_recv) = channel();
 
-impl App {
-    fn new() -> Result<App, io::Error> {
-        let term = rustty::Terminal::new()?;
-        let game = Gol::new(term.cols(), term.rows(), true);
-        Ok(App { term, game, state: AppState::Running, edit_cursor: (0, 0), frame_delay: 5 })
-    }
+    let game_runner = run_game(Arc::clone(&game));
+    let editor_runner = run_editor(Arc::clone(&game), Arc::clone(&editor), editor_recv);
 
-    fn run(&mut self) -> Result<(), io::Error> {
-        loop {
-            if let Some(evt) = self.term.get_event(Duration::from_millis(self.frame_delay))? {
-                match self.state {
-                    AppState::Editing => {
-                        match evt {
-                            rustty::Event::Key('q') => break,
-                            rustty::Event::Key(key) => self.editing(key),
+    loop {
+        if let Some(rustty::Event::Key(key)) = term.get_event(Duration::from_millis(50)).unwrap() {
+            let new_state = if let Some(action) = map_key_to_global_action(&state, key) {
+                match action {
+                    AppAction::Quit => { 
+                        editor_runner.finish();
+                        game_runner.finish();
+                        return; 
+                    },
+                    AppAction::EditDone => GameState::Paused,
+                    AppAction::TogglePause => {
+                        if let GameState::Paused = state {
+                            GameState::Running
+                        } else if let GameState::Running = state {
+                            GameState::Paused
+                        } else {
+                            state
                         }
                     },
-                    _ => {
-                        match evt {
-                            rustty::Event::Key('q') => break,
-                            rustty::Event::Key('c') => self.clear_grid(),
-                            rustty::Event::Key('p') => self.state.toggle_paused(),
-                            rustty::Event::Key('e') => { self.state = AppState::Editing },
-                            rustty::Event::Key(_) => (),
-                        }
+                    AppAction::EditMode => {
+                        GameState::Editing
+                    },
+                    AppAction::EditDone => {
+                        GameState::Paused
                     },
                 }
-            }
+            } else {
+                if state == GameState::Editing {
+                    for action in map_key_to_edit_action(key) {
+                        edit_actions.send(action);
+                    }
+                }
+                state
+            };
 
-            match self.state {
-                AppState::Running => {
-                    self.game_step();
-                },
-                _ => ()
-            }
-
-            self.term.swap_buffers()?;
-        }
-        Ok(())
-    }
-
-    fn game_step(&mut self) {
-        self.game.next_turn();
-        self.draw_game();
-    }
-    
-    fn draw_game(&mut self) {
-        let grid = self.game.grid();
-        let width = self.term.cols();
-        let height = self.term.rows();
-        for x in 0 .. width {
-            for y in 0 .. height {
-                if grid.get(x, y) == 1 {
-                    self.term[(x, y)].set_fg(rustty::Color::Yellow);
-                    self.term[(x, y)].set_bg(rustty::Color::Red);
-                } else {
-                    self.term[(x, y)].set_fg(rustty::Color::Black);
-                    self.term[(x, y)].set_bg(rustty::Color::Black);
+            if new_state != state {
+                match state {
+                    GameState::Editing => { editor_runner.pause() },
+                    GameState::Running => { game_runner.pause() },
+                    _ => (),
+                }
+                state = new_state;
+                match state {
+                    GameState::Editing => { editor_runner.start() },
+                    GameState::Running => { game_runner.start() },
+                    _ => (),
                 }
             }
         }
-    }
 
-    fn editing(&mut self, key: char) {
-        match key {
-            'i' => self.move_edit_cursor(0, -1),
-            'k' => self.move_edit_cursor(0, 1),
-            'j' => self.move_edit_cursor(-1, 0),
-            'l' => self.move_edit_cursor(1, 0),
-            'g' => self.glider_gun(),
-            '1' => self.glider(1),
-            '2' => self.glider(2),
-            '3' => self.glider(3),
-            '4' => self.glider(4),
-            'c' => self.clear_grid(),
-            ' ' => self.toggle_edit_cell(),
-            '\r' => self.state = AppState::Running,
-            _ => (),
-        }
+        draw_current_state(state, Arc::clone(&game), Arc::clone(&editor), &mut term);
     }
+}
 
-    fn clear_grid(&mut self) {
-        let width = self.term.cols();
-        let height = self.term.rows();
-        for x in 0 .. width {
-            for y in 0 .. height {
-                self.game.grid_mut().set(x, y, 0);
+fn run_editor(game: Arc<Mutex<Gol>>, editor: Arc<Mutex<Editor>>, recv: Receiver<EditAction>) -> Runner {
+    Runner::new(move || {
+        // await action before locking anything else
+        let action = recv.recv().ok();
+        let mut game = game.lock().unwrap();
+        let grid = game.grid_mut();
+        let mut editor = editor.lock().unwrap();
+        action.map(|action| editor.apply_action(action, grid)); 
+    })
+}
+
+fn run_game(game: Arc<Mutex<Gol>>) -> Runner {
+    Runner::new(move || {
+        let mut game = game.lock().unwrap();
+        game.next_turn();
+    })
+}
+
+fn map_key_to_global_action(state: &GameState, key: char) -> Option<AppAction> {
+    match key {
+        'q' => return Some(AppAction::Quit),
+        _ => (),
+    }
+    match state {
+        GameState::Editing => {
+            match key {
+                '\r' => Some(AppAction::EditDone),
+                _ => None,
             }
-        }
-    }
-
-    fn glider_gun(&mut self) {
-        let glider_gun = include_bytes!("presets/glider_gun.txt");
-        self.draw_from_ascii(glider_gun);
-    }
-
-    fn glider(&mut self, variant: u8) {
-        let shape: &[u8] = match variant {
-            1 => include_bytes!("presets/glider_1.txt"),
-            2 => include_bytes!("presets/glider_2.txt"),
-            3 => include_bytes!("presets/glider_3.txt"),
-            4 => include_bytes!("presets/glider_4.txt"),
-            _ => b"",
-        };
-        self.draw_from_ascii(shape);
-    }
-
-    fn draw_from_ascii(&mut self, data: &[u8]) {
-        let (x, y) = self.edit_cursor;
-        let (w, h) = (self.term.cols(), self.term.rows());
-        let lines: Vec<Vec<u8>> = data.splitn(usize::max_value(), |&c| c == b'\n')
-            .map(|line| line.into_iter().cloned().collect())
-            .collect();
-        for j in 0 .. lines.len() {
-            let row = &lines[j];
-            for i in 0 .. row.len() {
-                self.edit_cursor = ((x + i + w) % w, (y + j + h) % h);
-                if lines[j][i] != b' ' {
-                    self.toggle_edit_cell();
-                }
+        },
+        // Paused or Running:
+        _ => {
+            match key {
+                '\r' => Some(AppAction::TogglePause),
+                'e' => Some(AppAction::EditMode),
+                _ => None,
             }
-        }
-        self.draw_game();
+        },
     }
+}
 
-    fn move_edit_cursor(&mut self, by_horiz: isize, by_vert: isize) {
-        let (x, y) = self.edit_cursor;
-        let grid = self.game.grid();
-        let width = self.term.cols();
-        let height = self.term.rows();
-        if grid.get(x, y) == 0 {
-            self.term[(x, y)].set_bg(rustty::Color::Black);
-        } else {
-            self.term[(x, y)].set_bg(rustty::Color::Red);
-        }
-        let (x, y) = (((x + width) as isize + by_horiz) as usize % width, 
-                    ((y + height) as isize + by_vert) as usize % height);
-        self.edit_cursor = (x, y);
-        self.term[(x, y)].set_bg(rustty::Color::White);
+fn map_key_to_edit_action(key: char) -> Option<EditAction> {
+    match key {
+        'c' => Some(EditAction::Clear),
+        'i' => Some(EditAction::MoveCursorBy { x: 0, y: -1 }),
+        'k' => Some(EditAction::MoveCursorBy { x: 0, y: 1 }),
+        'j' => Some(EditAction::MoveCursorBy { x: -1, y: 0 }),
+        'l' => Some(EditAction::MoveCursorBy { x: 1, y: 0 }),
+        ' ' => Some(EditAction::ToggleCell),
+        n if n.is_digit(10) => Some(EditAction::AddPreset { index: n.to_string().parse().unwrap() }),
+        _ => None,
     }
+}
 
-    fn toggle_edit_cell(&mut self) {
-        let (x, y) = self.edit_cursor;
-        let grid = self.game.grid_mut();
-        let current = grid.get(x, y);
-        if current == 0 {
-            grid.set(x, y, 1);
-            self.term[(x, y)].set_bg(rustty::Color::Green);
-        } else {
-            grid.set(x, y, 0);
-            self.term[(x, y)].set_bg(rustty::Color::White);
+fn draw_current_state(state: GameState, game: Arc<Mutex<Gol>>, editor: Arc<Mutex<Editor>>, term: &mut rustty::Terminal) {
+    match state {
+        GameState::Running => {
+            let game = game.lock().unwrap();
+            draw_game(term, game.grid());
+        },
+        GameState::Editing => {
+            let game = game.lock().unwrap();
+            let editor = editor.lock().unwrap();
+            draw_editor(term, &editor, game.grid());
+        },
+        _ => { },
+    }
+    term.swap_buffers().unwrap();   
+}
+
+fn draw_game(term: &mut rustty::Terminal, grid: &Grid<u8>) {
+    let width = grid.width();
+    let height = grid.height();
+    for x in 0 .. width {
+        for y in 0 .. height {
+            if grid.get(x, y) == 1 {
+                term[(x, y)].set_bg(rustty::Color::Red);
+            } else {
+                term[(x, y)].set_bg(rustty::Color::Black);
+            }
         }
     }
 }
 
-fn main() -> Result<(), io::Error> {
-    let mut app = App::new()?;
-    app.run()
+fn draw_editor(term: &mut rustty::Terminal, editor: &Editor, grid: &Grid<u8>) {
+    draw_game(term, grid);
+    let (x, y) = editor.get_cursor();
+    if grid.get(x, y) == 1 {
+        term[(x, y)].set_bg(rustty::Color::Green);
+    } else {
+        term[(x, y)].set_bg(rustty::Color::White);
+    }
 }
