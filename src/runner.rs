@@ -10,15 +10,17 @@ pub struct Runner {
     send: Sender<Control>
 }
 
+pub struct Error;
+
 impl Runner {
-    pub fn start(&self) {
-        self.send.send(Control::Play);
+    pub fn start(&self) -> Result<(), Error> {
+        self.send.send(Control::Play).map_err(|_| Error)
     }
-    pub fn pause(&self) {
-        self.send.send(Control::Pause);
+    pub fn pause(&self) -> Result<(), Error> {
+        self.send.send(Control::Pause).map_err(|_| Error)
     }
-    pub fn finish(&self) {
-        self.send.send(Control::Finish);
+    pub fn finish(&self) -> Result<(), Error> {
+        self.send.send(Control::Finish).map_err(|_| Error)
     }
 
     pub fn new<F>(f: F) -> Runner
@@ -30,7 +32,7 @@ impl Runner {
             let mut paused = true;
             loop {
                 match recv_msg(&recv, paused, Control::Play) {
-                    Ok(Control::Finish) => return (),
+                    Ok(Control::Finish) => return,
                     Ok(Control::Pause) => { 
                         paused = true; 
                     },
@@ -38,7 +40,7 @@ impl Runner {
                         paused = false;
                         f();
                     },
-                    Err(_) => return (),
+                    Err(_) => return,
                 }
             }
         });
