@@ -37,15 +37,13 @@ impl Gol {
 
         for x in 0 .. width {
             for y in 0 .. height {
-                let mut neighbours = [0; 8];
                 let num_neighbours: u8 = {
                     let prev = self.grid.old_grid();
                     if self.wrapped {
-                        prev.get_neighbours_wrapped(x, y, &mut neighbours);
+                        prev.neighbours_wrapped(x, y).sum()
                     } else {
-                        prev.get_neighbours(x, y, &mut neighbours);
+                        prev.neighbours(x, y).sum()
                     }
-                    neighbours.into_iter().sum()
                 };
                 if self.grid.old_grid().get(x, y) == 1 {
                     if num_neighbours < 2 || num_neighbours > 3 {

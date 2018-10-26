@@ -31,6 +31,16 @@ enum GameState {
     Editing,
 }
 
+impl GameState {
+    fn toggle_paused(&self) -> GameState {
+        match *self {
+            GameState::Paused => GameState::Running,
+            GameState::Running => GameState::Paused,
+            s => s
+        }
+    }
+}
+
 fn main() {
     let mut state = GameState::Paused;
     // TODO: handle resizing the terminal window
@@ -45,30 +55,18 @@ fn main() {
     let editor_runner = run_editor(Arc::clone(&game), Arc::clone(&editor), editor_recv);
 
     loop {
-        if let Some(rustty::Event::Key(key)) = term.get_event(Duration::from_millis(50)).unwrap() {
+        if let Some(rustty::Event::Key(key)) = term.get_event(Duration::from_millis(20)).unwrap() {
             let new_state = if let Some(action) = map_key_to_global_action(&state, key) {
                 match action {
-                    AppAction::Quit => { 
+                    AppAction::Quit => {
                         editor_runner.finish();
                         game_runner.finish();
-                        return; 
+                        return;
                     },
                     AppAction::EditDone => GameState::Paused,
-                    AppAction::TogglePause => {
-                        if let GameState::Paused = state {
-                            GameState::Running
-                        } else if let GameState::Running = state {
-                            GameState::Paused
-                        } else {
-                            state
-                        }
-                    },
-                    AppAction::EditMode => {
-                        GameState::Editing
-                    },
-                    AppAction::EditDone => {
-                        GameState::Paused
-                    },
+                    AppAction::TogglePause => state.toggle_paused(),
+                    AppAction::EditMode => GameState::Editing,
+                    AppAction::EditDone => GameState::Paused,
                 }
             } else {
                 if state == GameState::Editing {

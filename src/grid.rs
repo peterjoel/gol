@@ -7,8 +7,10 @@ pub struct Grid<T> {
     data: Vec<T>,
 }
 
+static NEIGHBOUR_POSITIONS: [(isize, isize); 8] = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)];
+
 impl<T> Grid<T> {
-    pub fn new(width: usize, height: usize) -> Grid<T> 
+    pub fn new(width: usize, height: usize) -> Grid<T>
     where 
         T: Default + Clone,
     {
@@ -21,7 +23,7 @@ impl<T> Grid<T> {
         Grid { width, height, data }
     }
 
-    pub fn get(&self, x: usize, y: usize) -> T 
+    pub fn get(&self, x: usize, y: usize) -> T
     where 
         T: Copy,
     {
@@ -54,7 +56,7 @@ impl<T> Grid<T> {
         *self.get_mut(x, y) = value;
     }
 
-    pub fn set_all(&mut self, value: T) 
+    pub fn set_all(&mut self, value: T)
     where
         T: Clone,
     {
@@ -63,62 +65,36 @@ impl<T> Grid<T> {
         }
     }
 
-    pub fn get_neighbours(&self, x: usize, y: usize, res: &mut [T])
+    pub fn neighbours(&self, x: usize, y: usize) -> impl Iterator<Item = T> + '_
     where
         T: Copy,
     {
-        if y == 0 {
-            if x == 0 {
-                res[0] = self.get(x, y + 1);
-                res[1] = self.get(x + 1, y);
-                res[2] = self.get(x + 1, y + 1);
-            } else if x == self.width - 1 {
-                res[0] = self.get(x, y + 1);
-                res[1] = self.get(x - 1, y);
-                res[2] = self.get(x - 1, y + 1);
-            }
-        } else if y == self.height - 1 {
-            if x == 0 {
-                res[0] = self.get(x, y - 1);
-                res[1] = self.get(x + 1, y);
-                res[2] = self.get(x + 1, y - 1);
-            } else if x == self.width - 1 {
-                res[0] = self.get(x, y - 1);
-                res[1] = self.get(x - 1, y);
-                res[2] = self.get(x - 1, y - 1);
-            }
-        } else {
-            res[0] = self.get(x, y + 1);
-            res[1] = self.get(x, y - 1);
-            if x != self.width - 1 {
-                res[2] = self.get(x + 1, y);
-                res[3] = self.get(x + 1, y + 1);
-                res[4] = self.get(x + 1, y - 1);
-            }
-            if x != 0 {
-                res[5] = self.get(x - 1, y);
-                res[6] = self.get(x - 1, y + 1);
-                res[7] = self.get(x - 1, y - 1);
-            }
-        }
+        let (x, y) = (x as isize, y as isize);
+        let (w, h) = (self.width as isize, self.height as isize);
+        NEIGHBOUR_POSITIONS.iter()
+            .flat_map(move |(dx, dy)| {
+                let new_x = x + dx;
+                let new_y = y + dy;
+                if new_x >= 0 && new_y >= 0 && new_x < w && new_y < h {
+                    Some(self.get(new_x as usize, new_y as usize))
+                } else {
+                    None
+                }
+            })
     }
 
-    pub fn get_neighbours_wrapped(&self, x: usize, y: usize, res: &mut [T])
+    pub fn neighbours_wrapped(&self, x: usize, y: usize) -> impl Iterator<Item = T> + '_
     where
         T: Copy,
     {
-        let y_top = (y + self.height - 1) % self.height;
-        let y_bottom = (y + 1) % self.height;
-        let x_left = (x + self.width - 1) % self.width;
-        let x_right = (x + 1) % self.width;
-        res[0] = self.get(x_left, y_top);
-        res[1] = self.get(x_left, y);
-        res[2] = self.get(x_left, y_bottom);
-        res[3] = self.get(x, y_top);
-        res[4] = self.get(x, y_bottom);
-        res[5] = self.get(x_right, y_top);
-        res[6] = self.get(x_right, y);
-        res[7] = self.get(x_right, y_bottom);
+        let (x, y) = (x as isize, y as isize);
+        let (w, h) = (self.width as isize, self.height as isize);
+        NEIGHBOUR_POSITIONS.iter()
+            .flat_map(move |(dx, dy)| {
+                let new_x = (x + dx + w) % w;
+                let new_y = (y + dy + h) % h;
+                Some(self.get(new_x as usize, new_y as usize))
+            })
     }
 }
 
