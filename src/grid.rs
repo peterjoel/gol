@@ -7,24 +7,47 @@ pub struct Grid<T> {
     data: Vec<T>,
 }
 
-static NEIGHBOUR_POSITIONS: [(isize, isize); 8] = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)];
+static NEIGHBOUR_POSITIONS: [(isize, isize); 8] = [
+    (-1, -1),
+    (-1, 0),
+    (-1, 1),
+    (0, -1),
+    (0, 1),
+    (1, -1),
+    (1, 0),
+    (1, 1),
+];
 
 impl<T> Grid<T> {
     pub fn new(width: usize, height: usize) -> Grid<T>
-    where 
+    where
         T: Default + Clone,
     {
         let data = vec![T::default(); width * height];
-        Grid { width, height, data }
+        Grid {
+            width,
+            height,
+            data,
+        }
     }
 
     pub fn with_data(width: usize, height: usize, data: Vec<T>) -> Grid<T> {
-        assert!(data.len() == width * height, "invalid data size: {}, w={}, h={}", data.len(), width, height);
-        Grid { width, height, data }
+        assert!(
+            data.len() == width * height,
+            "invalid data size: {}, w={}, h={}",
+            data.len(),
+            width,
+            height
+        );
+        Grid {
+            width,
+            height,
+            data,
+        }
     }
 
     pub fn get(&self, x: usize, y: usize) -> T
-    where 
+    where
         T: Copy,
     {
         debug_assert!(x < self.width, "w = {}, x = {}", self.width, x);
@@ -71,16 +94,15 @@ impl<T> Grid<T> {
     {
         let (x, y) = (x as isize, y as isize);
         let (w, h) = (self.width as isize, self.height as isize);
-        NEIGHBOUR_POSITIONS.iter()
-            .flat_map(move |(dx, dy)| {
-                let new_x = x + dx;
-                let new_y = y + dy;
-                if new_x >= 0 && new_y >= 0 && new_x < w && new_y < h {
-                    Some(self.get(new_x as usize, new_y as usize))
-                } else {
-                    None
-                }
-            })
+        NEIGHBOUR_POSITIONS.iter().flat_map(move |(dx, dy)| {
+            let new_x = x + dx;
+            let new_y = y + dy;
+            if new_x >= 0 && new_y >= 0 && new_x < w && new_y < h {
+                Some(self.get(new_x as usize, new_y as usize))
+            } else {
+                None
+            }
+        })
     }
 
     pub fn neighbours_wrapped(&self, x: usize, y: usize) -> impl Iterator<Item = T> + '_
@@ -89,12 +111,11 @@ impl<T> Grid<T> {
     {
         let (x, y) = (x as isize, y as isize);
         let (w, h) = (self.width as isize, self.height as isize);
-        NEIGHBOUR_POSITIONS.iter()
-            .flat_map(move |(dx, dy)| {
-                let new_x = (x + dx + w) % w;
-                let new_y = (y + dy + h) % h;
-                Some(self.get(new_x as usize, new_y as usize))
-            })
+        NEIGHBOUR_POSITIONS.iter().flat_map(move |(dx, dy)| {
+            let new_x = (x + dx + w) % w;
+            let new_y = (y + dy + h) % h;
+            Some(self.get(new_x as usize, new_y as usize))
+        })
     }
 }
 
@@ -109,7 +130,10 @@ where
     T: Clone,
 {
     fn from(grid: Grid<T>) -> Game<T> {
-        Game { old_grid: grid.clone(), grid }
+        Game {
+            old_grid: grid.clone(),
+            grid,
+        }
     }
 }
 

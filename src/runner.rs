@@ -1,13 +1,15 @@
+use std::sync::mpsc::{channel, Receiver, RecvError, Sender, TryRecvError};
 use std::thread;
-use std::sync::mpsc::{channel, Sender, Receiver, RecvError, TryRecvError};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 enum Control {
-    Finish, Play, Pause,
+    Finish,
+    Play,
+    Pause,
 }
 
 pub struct Runner {
-    send: Sender<Control>
+    send: Sender<Control>,
 }
 
 pub struct Error;
@@ -33,13 +35,13 @@ impl Runner {
             loop {
                 match recv_msg(&recv, paused, Control::Play) {
                     Ok(Control::Finish) => return,
-                    Ok(Control::Pause) => { 
-                        paused = true; 
-                    },
-                    Ok(Control::Play) => { 
+                    Ok(Control::Pause) => {
+                        paused = true;
+                    }
+                    Ok(Control::Play) => {
                         paused = false;
                         f();
-                    },
+                    }
                     Err(_) => return,
                 }
             }

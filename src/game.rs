@@ -1,4 +1,4 @@
-use ::grid::*;
+use grid::*;
 
 #[derive(Debug)]
 pub struct Gol {
@@ -8,11 +8,17 @@ pub struct Gol {
 
 impl Gol {
     pub fn new(width: usize, height: usize, wrapped: bool) -> Gol {
-        Gol { grid: Game::new(width, height), wrapped }
+        Gol {
+            grid: Game::new(width, height),
+            wrapped,
+        }
     }
 
     pub fn new_from_grid(grid: Grid<u8>, wrapped: bool) -> Gol {
-        Gol { grid: grid.into(), wrapped }
+        Gol {
+            grid: grid.into(),
+            wrapped,
+        }
     }
 
     pub fn init(&mut self, cells: &[(usize, usize)]) {
@@ -35,8 +41,8 @@ impl Gol {
         let width = self.grid.grid().width();
         let height = self.grid.grid().height();
 
-        for x in 0 .. width {
-            for y in 0 .. height {
+        for x in 0..width {
+            for y in 0..height {
                 let num_neighbours: u8 = {
                     let prev = self.grid.old_grid();
                     if self.wrapped {

@@ -1,5 +1,5 @@
-use ::grid::*;
-use ::presets;
+use grid::*;
+use presets;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum EditAction {
@@ -10,7 +10,7 @@ pub enum EditAction {
 }
 
 pub struct Editor {
-    cursor: (usize, usize)
+    cursor: (usize, usize),
 }
 
 impl Editor {
@@ -26,7 +26,7 @@ impl Editor {
         self.cursor
     }
 
-    pub fn edit<'a>(&'a mut self, grid: &'a mut Grid<u8>) -> EditSteps<'a> {
+    fn edit<'a>(&'a mut self, grid: &'a mut Grid<u8>) -> EditSteps<'a> {
         EditSteps { editor: self, grid }
     }
 
@@ -37,23 +37,18 @@ impl Editor {
             EditAction::ToggleCell => edit_steps.toggle_current(),
             EditAction::MoveCursorBy { x, y } => edit_steps.move_cursor_by(x, y),
             EditAction::AddPreset { index } => edit_steps.add_preset(presets::get_preset(index)),
-        } 
+        }
     }
 }
 
-pub struct EditSteps<'a> {
+struct EditSteps<'a> {
     editor: &'a mut Editor,
     grid: &'a mut Grid<u8>,
 }
 
 impl<'a> EditSteps<'a> {
-
     pub fn toggle_at(&mut self, x: usize, y: usize) {
-        let val = if self.grid.get(x, y) == 0 {
-            1
-        } else {
-            0
-        };
+        let val = if self.grid.get(x, y) == 0 { 1 } else { 0 };
         self.grid.set(x, y, val);
     }
 
@@ -68,7 +63,7 @@ impl<'a> EditSteps<'a> {
         for (i, j) in cells {
             self.grid.set((x + i + w) % w, (y + j + h) % h, 1);
         }
-    }   
+    }
 
     pub fn clear_all(&mut self) {
         self.grid.set_all(0);
@@ -77,9 +72,8 @@ impl<'a> EditSteps<'a> {
     pub fn move_cursor_by(&mut self, by_x: isize, by_y: isize) {
         let (mut x, mut y) = self.editor.cursor;
         let (w, h) = (self.grid.width(), self.grid.height());
-        x = (x as isize + by_x + w as isize ) as usize % w;
-        y = (y as isize + by_y + h as isize ) as usize % h;
+        x = (x as isize + by_x + w as isize) as usize % w;
+        y = (y as isize + by_y + h as isize) as usize % h;
         self.editor.set_cursor(x, y);
     }
-
 }
