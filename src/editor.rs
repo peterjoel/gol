@@ -56,7 +56,6 @@ struct EditSteps<'a> {
 }
 
 impl<'a> EditSteps<'a> {
-
     pub fn set_cell_at(&mut self, value: bool, x: usize, y: usize) {
         self.grid.set(x, y, value as u8);
     }
