@@ -1,4 +1,4 @@
-use grid::*;
+use grid::{Game, Grid};
 
 #[derive(Debug)]
 pub struct Gol {

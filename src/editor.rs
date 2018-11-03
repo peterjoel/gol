@@ -1,10 +1,14 @@
-use grid::*;
-use presets;
+use grid::Grid;
+use presets::get_preset;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum EditAction {
     MoveCursorBy { x: isize, y: isize },
+    MoveCursorTo { x: usize, y: usize },
     ToggleCell,
+    ToggleCellAt { x: usize, y: usize },
+    KillCellAt { x: usize, y: usize },
+    AddCellAt { x: usize, y: usize },
     Clear,
     AddPreset { index: u8 },
 }
@@ -31,12 +35,17 @@ impl Editor {
     }
 
     pub fn apply_action(&mut self, action: EditAction, grid: &mut Grid<u8>) {
+        use EditAction::*;
         let mut edit_steps = self.edit(grid);
         match action {
-            EditAction::Clear => edit_steps.clear_all(),
-            EditAction::ToggleCell => edit_steps.toggle_current(),
-            EditAction::MoveCursorBy { x, y } => edit_steps.move_cursor_by(x, y),
-            EditAction::AddPreset { index } => edit_steps.add_preset(presets::get_preset(index)),
+            Clear => edit_steps.clear_all(),
+            ToggleCell => edit_steps.toggle_current(),
+            ToggleCellAt { x, y } => edit_steps.toggle_at(x, y),
+            KillCellAt { x, y } => edit_steps.set_cell_at(false, x, y),
+            AddCellAt { x, y } => edit_steps.set_cell_at(true, x, y),
+            MoveCursorBy { x, y } => edit_steps.move_cursor_by(x, y),
+            MoveCursorTo { x, y } => edit_steps.move_cursor_to(x, y),
+            AddPreset { index } => edit_steps.add_preset(get_preset(index)),
         }
     }
 }
@@ -47,6 +56,11 @@ struct EditSteps<'a> {
 }
 
 impl<'a> EditSteps<'a> {
+
+    pub fn set_cell_at(&mut self, value: bool, x: usize, y: usize) {
+        self.grid.set(x, y, value as u8);
+    }
+
     pub fn toggle_at(&mut self, x: usize, y: usize) {
         let val = if self.grid.get(x, y) == 0 { 1 } else { 0 };
         self.grid.set(x, y, val);
@@ -74,6 +88,10 @@ impl<'a> EditSteps<'a> {
         let (w, h) = (self.grid.width(), self.grid.height());
         x = (x as isize + by_x + w as isize) as usize % w;
         y = (y as isize + by_y + h as isize) as usize % h;
+        self.editor.set_cursor(x, y);
+    }
+
+    pub fn move_cursor_to(&mut self, x: usize, y: usize) {
         self.editor.set_cursor(x, y);
     }
 }

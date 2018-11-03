@@ -12,6 +12,7 @@ pub struct Runner {
     send: Sender<Control>,
 }
 
+#[derive(Debug)]
 pub struct Error;
 
 impl Runner {
